@@ -3,7 +3,7 @@
 import sys
 sys.path.append('../CVML')
 
-from models import scalar, gauge, thirring
+from models import scalar, gauge, thirring, transmon
 from mc import metropolis, replica, hmc
 import argparse
 import itertools
