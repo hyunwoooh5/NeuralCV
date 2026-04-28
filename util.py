@@ -27,6 +27,33 @@ def jackknife(xs, ws=None, Bs=50):  # Bs: Block size
     return m, (np.std(vals.real) + 1j*np.std(vals.imag))*np.sqrt(len(vals)-1)
 
 
+def jackknife_effmass(xs, Bs=50):  # Bs: Block size
+    N_conf, T = xs.shape
+
+    B = len(xs)//Bs  # number of blocks
+
+    data = xs[:B*Bs]
+
+    blocks = data.reshape(B, Bs, T)
+    block_means = np.mean(blocks, axis=1)  # shape: (B, T)
+
+    total_sum = np.sum(block_means, axis=0)
+    jack_samples = (total_sum-block_means) / (B-1)
+
+    # Effective mass
+    eff_mass_jack = np.log(jack_samples[:, :-1] / jack_samples[:, 1:])
+
+    # mean
+    total_mean_correlator = np.mean(data, axis=0)
+    eff_mass_means = np.log(
+        total_mean_correlator[:-1] / total_mean_correlator[1:])
+
+    # jackknife errors
+    errors = np.sqrt(B-1) * np.std(eff_mass_jack, axis=0)
+
+    return eff_mass_means, errors
+
+
 def bin(xs, ws=None, Bs=50):  # Bs: Block size
     B = len(xs)//Bs  # number of blocks
     if ws is None:  # for reweighting
