@@ -9,7 +9,7 @@ import numpy as np
 class Model:
     # geom: Tuple[int]
     Nt: int
-    dt: float  # ns
+    t: float  # ns
     E_C: float  # h * GHz
     E_J: float  # h * GHz
 
@@ -23,7 +23,7 @@ class Model:
         self.E_C = 2*jnp.pi * 10**9 * self.E_C  # Hz
         self.E_J = 2*jnp.pi * 10**9 * self.E_J  # Hz
 
-        self.dt = 1e-9 * self.dt  # Hz
+        self.dt = 1e-9 * 1./self.Nt  # Hz
 
         self.C = 1./(2.*self.E_C)
 
