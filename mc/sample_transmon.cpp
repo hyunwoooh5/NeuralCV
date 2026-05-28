@@ -29,7 +29,7 @@ struct Index
 struct params
 {
     int nt, dof;
-    double E_C, E_J, dt, delta;
+    double E_C, E_J, t, dt, delta;
     double C;
 
     int n_decor, n_thermal, n_conf;
@@ -201,12 +201,14 @@ int main(int argc, char **argv)
     p.delta = 1;
 
     p.nt = std::stoi(argv[1]);
+    p.t = std::stod(argv[2]);
     // p.nx = std::stoi(argv[2]);
+    
     p.dof = p.nt * 1;
-    p.E_C = 2 * PI * 1e9 * std::stod(argv[2]);
-    p.E_J = 2 * PI * 1e9 * std::stod(argv[3]);
-    p.dt = 1e-9 * std::stod(argv[4]);
-
+    p.E_C = 2 * PI * 1e9 * std::stod(argv[3]);
+    p.E_J = 2 * PI * 1e9 * std::stod(argv[4]);
+    p.dt = 1e-9 * p.t/p.nt;
+    
     p.C = 1./(2.*p.E_C);
     
     p.n_decor = std::stoi(argv[5]);
