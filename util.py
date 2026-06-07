@@ -27,6 +27,39 @@ def jackknife(xs, ws=None, Bs=50):  # Bs: Block size
     return m, (np.std(vals.real) + 1j*np.std(vals.imag))*np.sqrt(len(vals)-1)
 
 
+def jackknife_cov(data, Bs=50):  # Bs: Block size
+    N_conf, T = data.shape
+
+    B = N_conf//Bs  # number of blocks
+
+    # Truncate the dataset to ensure it is evenly divisible by the block size
+    truncated_data = data[:B * Bs]
+
+    # Reshape into blocks: shape becomes (B, Bs, T)
+    blocked_data = truncated_data.reshape((B, Bs, T))
+
+    # Calculate the mean of each block: shape becomes (B, T)
+    block_means = jnp.mean(blocked_data, axis=1)
+
+    # Calculate the global mean across all blocks: shape becomes (T,)
+    global_mean = jnp.mean(block_means, axis=0)
+
+    # Calculate jackknife replicates algebraically without using jnp.delete or loops.
+    # A jackknife replicate is the mean of the dataset excluding one specific block.
+    # replicates shape: (B, N)
+    replicates = (B * global_mean - block_means) / (B - 1)
+
+    # Calculate the deviations of the replicates from the global mean
+    # delta shape: (B, N)
+    delta = replicates - global_mean
+
+    # Compute the covariance matrix using matrix multiplication
+    # (B, T).T @ (B, T) results in an (T, T) covariance matrix
+    cov_matrix = ((B - 1) / B) * jnp.dot(delta.T, delta)
+
+    return cov_matrix
+
+
 def jackknife_effmass(xs, Bs=50):  # Bs: Block size
     N_conf, T = xs.shape
 
