@@ -50,8 +50,12 @@ class Model:
 
     def observe_square(self, phi, av):
         # phi_re = phi.reshape(self.shape)
-        return jnp.asarray([jnp.mean((jnp.sin(jnp.roll(phi, -i))**2 - av) * (jnp.sin(phi)**2-av)) for i in range(self.Nt)])
+        return jnp.asarray([jnp.mean((jnp.sin(jnp.roll(phi, -i))**2 - av) * (jnp.sin(phi)**2 - av)) for i in range(self.Nt)])
 
     def observe_cubic(self, phi):
         # phi_re = phi.reshape(self.shape)
         return jnp.asarray([jnp.mean(jnp.sin(jnp.roll(phi, -i))**3 * jnp.sin(phi)**3) for i in range(self.Nt)])
+
+    def observe_o1o3(self, phi):
+        # phi_re = phi.reshape(self.shape)
+        return jnp.asarray([jnp.mean(jnp.sin(jnp.roll(phi, -i))**1 * jnp.sin(phi)**3) for i in range(self.Nt)])
