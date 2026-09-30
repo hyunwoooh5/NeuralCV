@@ -20,17 +20,23 @@ lamda=0.01
 )
 ```
 
-Then make configurations for training using Monte Carlo in `mc`. The dimension of the configuration should be (n_config, degree of freedom).
+Install the dependencies and the local package so its `src/` modules are importable:
+```
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m pip install -e .
+```
 
-Finally, use one of `cv.py` to train the subtraction function to optimize variance of a particular observable.
+Then make configurations for training using Monte Carlo in `src/mc`. The dimension of the configuration should be (n_config, degree of freedom).
+
+Finally, use one of the `src/cv_*.py` scripts to train the subtraction function to optimize variance of a particular observable.
 
 Here is an example:
 ```
 mkdir -p data
 vi model.dat # and copy and paste the above model
-cd mc
-make sample_scalar_2d
-cd ../
-./mc/sample_scalar 4 4 0.01 0.01 100 2000 data/sample.bin & 
-./cv_scalar.py data/model.dat data/cv.pickle data/sample.bin -i -l 1 -w 8 -lr 1e-3 -s -C 1000 # Terminate with CTRL-C
+make -C src/mc/cpp sample_scalar_2d
+./src/mc/cpp/sample_scalar_2d 4 4 0.01 0.01 100 2000 data/sample.bin &
+python src/cv_scalar.py data/model.dat data/cv.pickle data/sample.bin -i -l 1 -w 8 -lr 1e-3 -s -C 1000 # Terminate with CTRL-C
 ```
