@@ -1,19 +1,16 @@
-# Build settings for the standalone C++ Monte Carlo samplers in this directory.
-# Inputs are the compiler and Eigen include paths; make builds the matching
-# executable from a same-named .cpp source using these flags.
-#CXX=g++
-#CXXFLAGS += -O3 -I${HOME}/local/include -std=c++11 -I. -DNDEBUG -g 
-#CXXFLAGS += -O3 -I${HOME}/Programs/include -std=c++11 -I. -DNDEBUG  
+CXX ?= c++
+CXXFLAGS ?= -O3 -std=c++11 -DNDEBUG
+EIGEN_INCLUDE ?= $(HOME)/eigen-3.3.9
+CLI11_INCLUDE ?= $(HOME)/local/include
+CPPFLAGS += -I$(EIGEN_INCLUDE) -I$(CLI11_INCLUDE) -I$(HOME)/Programs/include -I$(HOME)/local/include -I.
+LDLIBS += -lm
 
-#CXXFLAGS += -O3 -I${HOME}/local/include -std=c++11 -DNDEBUG
-CXXFLAGS += -O3 -I${HOME}/Programs/include -std=c++11 -I. -DNDEBUG 
+.PHONY: clean
 
-CXXFLAGS += -O3 -I${HOME}/local/include -std=c++11 -DNDEBUG
+sample_%: sample_%.cpp monte_carlo.hpp
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $< -o $@ $(LDLIBS)
 
-# Add the Eigen include directory to the flags
-CXXFLAGS += -I${HOME}/eigen-3.3.9
-
-LDLIBS = -lm
-
-
-#is for comments
+clean:
+	rm -f sample_scalar_2d sample_scalar_3d sample_scalar_4d \
+		sample_su2_2d_obc_bronzan sample_su2_2d_obc_euler \
+		sample_transmon sample_u1_2d_obc sample_u1_2d_pbc

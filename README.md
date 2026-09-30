@@ -104,20 +104,31 @@ cover distinct research workflows and are not interchangeable for every model.
 ## C++ Samplers
 
 Build an individual executable with its Makefile target. For example, the
-periodic 2D scalar sampler takes `nt`, `nx`, mass-squared, quartic coupling,
-decorrelation sweeps, sample count, and output path:
+samplers share RNG, acceptance, calibration, thermalization, sample collection,
+and binary output helpers in the header-only `monte_carlo.hpp`; each source
+keeps its own model action and proposal. The periodic 2D scalar sampler takes
+`nt`, `nx`, mass-squared, quartic coupling, decorrelation sweeps, sample count,
+and output path:
 
 ```sh
-make -C src/mc/cpp sample_scalar_2d
-src/mc/cpp/sample_scalar_2d 4 4 0.01 0.01 100 2000 data/scalar2d.bin
+brew install cli11 eigen
+make -C src/mc/cpp sample_scalar_2d \
+	EIGEN_INCLUDE="$(brew --prefix eigen)/include/eigen3" \
+	CLI11_INCLUDE="$(brew --prefix cli11)/include"
+src/mc/cpp/sample_scalar_2d --nt 4 --nx 4 --mass-squared 0.01 --lambda 0.01 \
+	--decorrelation-sweeps 100 --thermalization-sweeps 10000 --samples 2000 \
+	--output data/scalar2d.bin --seed 12345
 ```
 
-The Makefile expects Eigen headers under `$HOME/eigen-3.3.9` and also adds
-include paths under `$HOME/Programs/include` and `$HOME/local/include`. Adjust
-those paths in the Makefile or provide the headers there before building.
-Other executables cover scalar fields in 3D/4D, open- and periodic-boundary
-U(1), open-boundary SU(2), and the transmon model. Their argument order is
-documented at the top of each C++ source file.
+`EIGEN_INCLUDE` defaults to `$HOME/eigen-3.3.9`; `CLI11_INCLUDE` defaults to
+`$HOME/local/include` and must contain `CLI/CLI.hpp`.
+Options can appear in any order; all model inputs and `--output` are required,
+while `--seed` defaults to `42` and `--thermalization-sweeps` defaults to
+`10000`. SU(2) samplers accept an optional `--decorrelation-sweeps` value,
+defaulting to `1`. Every executable supports `--help`. Other executables cover scalar fields in 3D/4D, open- and
+defaulting to `1`. Every executable supports `--help`. Other executables cover
+scalar fields in 3D/4D, open- and periodic-boundary U(1), open-boundary SU(2),
+and the transmon model; use their `--help` output for model-specific options.
 
 ## Papers
 

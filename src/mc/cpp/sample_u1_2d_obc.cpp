@@ -2,9 +2,9 @@
 Generate two-dimensional open-boundary U(1) gauge configurations with local
 Metropolis updates.
 
-Inputs: nt, nx, coupling beta, decorrelation sweeps, sample count, and output
-path. Output: binary file with dof and sample-count integers followed by
-sampled doubles in Eigen column-major order.
+Inputs: nt, nx, coupling beta, decorrelation sweeps, sample count, output path,
+and optional RNG seed. Output: binary file with dof and sample-count integers
+followed by sampled doubles in Eigen column-major order.
 */
 #include <iostream>
 #include <random>
@@ -12,19 +12,13 @@ sampled doubles in Eigen column-major order.
 #include <fstream>
 #include <ctime> // Timer
 #include <stdio.h>
+#include "monte_carlo.hpp"
 
 typedef std::complex<double> dcomp;
 const dcomp I(0, 1);
 const double PI = std::atan(1.0) * 4;
 
-// Random Number Generator
-// std::default_random_engine generator; // for random engine reset
-std::random_device generator;                           // get non-deterministic(truly random) seed
-std::mt19937 gen(generator());                          // reset RNG
-std::uniform_real_distribution<double> dist(-1.0, 1.0); // -1.0 to 1.0 uniform distribution
-std::uniform_real_distribution<> rand01(0.0, 1.0);      // For Metropolis
-
-int accept = 0; // For acceptance rate, Should not be defined again
+mc::Random random;
 
 // Functions
 // Lattice coordinates for one site.
@@ -88,13 +82,11 @@ double Action_Local(Eigen::ArrayXd &A, int n, params &p)
 Eigen::ArrayXd Metropolis(Eigen::ArrayXd &A, int n, params &p)
 {
     Eigen::ArrayXd A_new = A;
-    A_new[n] += p.delta * dist(gen);
+    A_new[n] += p.delta * random.proposal();
     double dS = Action_Local(A_new, n, p) - Action_Local(A, n, p);
 
-    if (exp(-dS) >= rand01(gen))
+    if (random.accept(dS))
     {
-        accept++;
-
         return A_new;
     }
     else
@@ -106,63 +98,19 @@ Eigen::ArrayXd Metropolis(Eigen::ArrayXd &A, int n, params &p)
 // Collect n_conf configurations separated by n_decor Metropolis sweeps.
 Eigen::MatrixXd Sweep(Eigen::ArrayXd &A, params &p)
 {
-    Eigen::MatrixXd samples = Eigen::MatrixXd::Zero(p.dof, p.n_conf);
-
-    for (int i = 0; i < p.n_conf; i++)
-    {
-        for (int j = 0; j < p.n_decor; j++)
-        {
-            for (int k = 0; k < p.dof; k++)
-            {
-                A = Metropolis(A, k, p);
-            }
-        }
-        samples.col(i) = A;
-    }
-
-    return samples;
+    return mc::sweep(A, p, p.n_decor, Metropolis);
 }
 
 // Apply the configured number of thermalization sweeps to the state.
 Eigen::ArrayXd Thermalization(Eigen::ArrayXd &A, params &p)
 {
-    for (int i = 0; i < p.n_thermal; i++)
-    {
-        for (int j = 0; j < p.dof; j++)
-        {
-            A = Metropolis(A, j, p);
-        }
-    }
-
-    return A;
+    return mc::thermalize(A, p, p.dof, p.n_thermal, Metropolis);
 }
 
 // Tune the proposal width until the measured acceptance fraction is in range.
 Eigen::ArrayXd Calibrate(Eigen::ArrayXd &A, params &p)
 {
-    double ratio = 0;
-    while (ratio <= 0.3 || ratio >= 0.55)
-    {
-        accept = 0;
-        for (int i = 0; i < 10; i++)
-        {
-            for (int j = 0; j < p.dof; j++)
-            {
-                A = Metropolis(A, j, p);
-            }
-        }
-        ratio = (double)accept / (p.dof * 10);
-        if (ratio >= 0.55)
-        {
-            p.delta = p.delta * 1.02;
-        }
-        else if (ratio <= 0.3)
-        {
-            p.delta = p.delta * 0.98;
-        }
-    }
-
-    return A;
+    return mc::calibrate(A, p, p.dof, Metropolis, random);
 }
 
 // Parse lattice/coupling/sample arguments and write header plus sampled angles.
@@ -171,13 +119,20 @@ int main(int argc, char **argv)
     struct params p;
     p.delta = 1;
 
-    p.nt = std::stoi(argv[1]);
-    p.nx = std::stoi(argv[2]);
+    unsigned int seed = 42;
+    std::string output_path;
+    CLI::App app{"Generate 2D open-boundary U(1) configurations"};
+    app.add_option("--nt", p.nt, "Temporal lattice extent")->required();
+    app.add_option("--nx", p.nx, "Spatial lattice extent")->required();
+    app.add_option("--beta", p.beta, "Gauge coupling")->required();
+    app.add_option("--decorrelation-sweeps", p.n_decor, "Sweeps between samples")->required();
+    app.add_option("--samples", p.n_conf, "Number of configurations to generate")->required();
+    mc::add_output_options(app, output_path, seed);
+    mc::add_thermalization_option(app, p.n_thermal);
+    CLI11_PARSE(app, argc, argv);
+
     p.dof = p.nt * p.nx;
-    p.beta = std::stod(argv[3]);
-    p.n_decor = std::stoi(argv[4]);
-    p.n_thermal = 10000;
-    p.n_conf = std::stoi(argv[5]);
+    random.reseed(seed);
 
     Eigen::ArrayXd configuration = Eigen::ArrayXd::Zero(p.dof); // Cold start
 
@@ -186,21 +141,11 @@ int main(int argc, char **argv)
     Calibrate(configuration, p);
     Eigen::MatrixXd sample = Sweep(configuration, p);
 
-    std::ofstream outfile(argv[6], std::ios::binary);
-    if (!outfile)
+    if (!mc::write_samples(output_path, p.dof, p.n_conf, sample))
     {
-        std::cerr << "Error opening file for writing.\n";
+        std::cerr << "Error writing sample file.\n";
         return 1;
     }
-
-    outfile.write(reinterpret_cast<char *>(&p.dof), sizeof(int));
-    outfile.write(reinterpret_cast<char *>(&p.n_conf), sizeof(int));
-
-    // Write the Eigen array data to the file in binary format
-    outfile.write(reinterpret_cast<const char *>(sample.data()), sample.size() * sizeof(double));
-
-    // Close the file
-    outfile.close();
 
     return 0;
 }
