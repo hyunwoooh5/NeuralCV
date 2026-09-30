@@ -1,4 +1,11 @@
-"""Stable GEVP analysis utilities for transmon correlators."""
+"""Build transmon correlators and solve generalized eigenvalue problems.
+
+Inputs are a transmon model plus configuration arrays, or a saved correlator
+channel cache; optional control-variate pickle files can be supplied when
+calculating channels. Functions return NumPy/JAX correlator arrays, cached
+channel dictionaries, or GEVP eigenvalues/effective masses with jackknife
+errors. Cache helpers read and write compressed NumPy archives.
+"""
 
 import jax
 import jax.numpy as jnp
@@ -100,22 +107,28 @@ def calculate_correlator_samples_with_control_variates(
         cv_paths = {cv_correlator: cv_path}
 
     class MLP(nn.Module):
+        """Dense network used to reconstruct saved transmon CV parameters."""
+
         volume: int
         features: tuple
 
         @nn.compact
         def __call__(self, values):
+            """Map one configuration vector through the saved CV network layers."""
             for features in self.features:
                 values = nn.Dense(features, use_bias=False)(values)
                 values = jnp.arcsinh(values)
             return nn.Dense(1, use_bias=False)(values)
 
     class CV_MLP(nn.Module):
+        """Control-variate wrapper matching the serialized training architecture."""
+
         volume: int
         features: tuple
 
         @nn.compact
         def __call__(self, values):
+            """Return the network output and learned scalar bias."""
             values = MLP(self.volume, self.features)(values)
             bias = self.param("bias", nn.initializers.zeros, (1,))
             return values, bias
@@ -143,14 +156,19 @@ def calculate_correlator_samples_with_control_variates(
         params_by_correlator[name] = params_list[:n_times]
 
     def control_variate(values, params):
+        """Evaluate the Stein control variate for each configuration in a batch."""
         def g(single):
+            """Build the translated vector-field values for one configuration."""
             def translated(shift):
+                """Evaluate the saved network on one temporal translation."""
                 rolled = jnp.roll(single.reshape(model.shape), shift, axis=(0,))
                 return cv_model.apply(params, rolled.reshape(volume))[0]
             return jnp.ravel(jax.vmap(translated)(index).T)
 
         def one(single):
+            """Compute the trace-minus-score term for one configuration."""
             def diagonal(shift):
+                """Compute one translated diagonal Jacobian contribution."""
                 rolled = jnp.roll(single.reshape(model.shape), shift, axis=(0,)).reshape(volume)
                 direction = jnp.zeros_like(single).at[0].set(1.0)
                 _, jvp_value = jax.jvp(
@@ -415,6 +433,7 @@ def gevp_with_jackknife_from_operator_samples(operator_samples, use_tmax=None,
         cache, use_tmax, n_blocks, chunk_size)
 
     def analyze(corr_sum, count):
+        """Normalize correlator sums and compute effective masses for a sample set."""
         corr = corr_sum / count
         return gevp_effective_masses(corr, t0, t_init, n_states, t_max, rcond)
 

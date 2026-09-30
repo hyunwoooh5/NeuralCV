@@ -1,4 +1,11 @@
 #!/usr/bin/env python
+"""Train a neural control variate for scalar-field observables.
+
+The command-line inputs are a model-expression file, a destination for the
+control-variate pickle, and a pickled configuration array, plus training
+options. Training diagnostics go to stdout; the trained model and parameters
+are periodically saved to the destination.
+"""
 
 from models import scalar
 import pickle
@@ -20,14 +27,18 @@ jax.config.update("jax_debug_infs", True)
 
 
 def arcsinh(x: any) -> any:
+    """Apply the inverse hyperbolic sine to a JAX value."""
     return jnp.arcsinh(x)
 
 
 def sinh(x: any) -> any:
+    """Apply the hyperbolic sine to a JAX value."""
     return jnp.sinh(x)
 
 
 class MLP(nn.Module):
+    """Dense network mapping a scalar-field configuration to one output component."""
+
     volume: int
     features: Sequence[int]
     kernel_init: Callable = nn.initializers.variance_scaling(
@@ -36,6 +47,7 @@ class MLP(nn.Module):
 
     @nn.compact
     def __call__(self, x):
+        """Evaluate dense hidden layers and return the final single-component output."""
         for feat in self.features:
             x = nn.Dense(feat, use_bias=False,
                          kernel_init=self.kernel_init,
@@ -47,17 +59,22 @@ class MLP(nn.Module):
 
 
 class CV_MLP(nn.Module):
+    """Dense scalar-field control variate with a learned scalar bias."""
+
     volume: int
     features: Sequence[int]
 
     @nn.compact
     def __call__(self, x):
+        """Return the learned vector output and its scalar bias parameter."""
         x = MLP(self.volume, self.features)(x)
         y = self.param('bias', nn.initializers.zeros, (1,))
         return x, y
 
 
 class CNN(nn.Module):
+    """Circular-convolution network that maps a scalar field to a control field."""
+
     volume: int
     features: Sequence[int]
     kernel_init: Callable = nn.initializers.variance_scaling(
@@ -66,6 +83,7 @@ class CNN(nn.Module):
 
     @nn.compact
     def __call__(self, x):
+        """Evaluate periodic convolutions and return flattened output plus bias."""
         for feat in self.features:
             x = nn.Conv(feat, kernel_size=(3, 3), use_bias=False, kernel_init=self.kernel_init,
                         bias_init=self.bias_init, padding='CIRCULAR')(x)  # Periodic boundary
@@ -78,11 +96,14 @@ class CNN(nn.Module):
 
 
 class CV_CNN(nn.Module):
+    """Convolutional scalar-field control variate for shaped lattice inputs."""
+
     volume: int
     features: Sequence[int]
 
     @nn.compact
     def __call__(self, x, shape):
+        """Reshape the flat field to ``shape`` and evaluate the convolutional network."""
         x = x.reshape(shape)
         x = CNN(self.volume, self.features)(x)
         return x

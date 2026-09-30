@@ -1,3 +1,11 @@
+/*
+Generate periodic two-dimensional scalar phi-four configurations with local
+Metropolis updates.
+
+Inputs: nt, nx, mass-squared, quartic coupling, decorrelation sweeps, sample
+count, and output path. Output: binary file with dof and sample-count integers,
+followed by the sampled doubles in Eigen column-major order.
+*/
 #include <iostream>
 #include <random>
 #include <Eigen/Dense>
@@ -19,11 +27,13 @@ std::uniform_real_distribution<> rand01(0.0, 1.0);      // For Metropolis
 int accept = 0; // For acceptance rate, Should not be defined again
 
 // Functions
+// Lattice coordinates for one scalar-field site.
 struct Index
 {
     int x0, x1;
 };
 
+// Simulation parameters for the periodic 2D scalar field.
 struct params
 {
     int nt, nx, dof;
@@ -31,11 +41,13 @@ struct params
     int n_decor, n_thermal, n_conf;
 };
 
+// Flatten periodic lattice coordinates into a site index.
 inline int Idx(int x0, int x1, int nt, int nx)
 {
     return (x1 % nx) + nx * (x0 % nt);
 }
 
+// Convert a flattened site index into its two lattice coordinates.
 Index Idx_inv(int n, int nx)
 {
     struct Index idx;
@@ -44,6 +56,7 @@ Index Idx_inv(int n, int nx)
     return idx;
 }
 
+// Return the complex log determinant and optionally store the matrix inverse.
 dcomp Log_Det(const Eigen::MatrixXcd &m, Eigen::MatrixXcd *inv = NULL)
 {
     Eigen::PartialPivLU<Eigen::MatrixXcd> lu(m); // LU decomposition of M
@@ -59,11 +72,13 @@ dcomp Log_Det(const Eigen::MatrixXcd &m, Eigen::MatrixXcd *inv = NULL)
 }
 
 // Metropolis
+// Placeholder for a full-action calculation; the sampler uses Action_Local.
 double Action(Eigen::ArrayXd &A)
 {
     return 0;
 }
 
+// Evaluate the potential and nearest-neighbor action terms affected at site n.
 double Action_Local(Eigen::ArrayXd &A, int n, params &p)
 {
     struct Index idx;
@@ -84,6 +99,7 @@ double Action_Local(Eigen::ArrayXd &A, int n, params &p)
     return pot + kint + kinx;
 }
 
+// Propose and accept/reject a change to one scalar-field site.
 Eigen::ArrayXd Metropolis(Eigen::ArrayXd &A, int n, params &p)
 {
     Eigen::ArrayXd A_new = A;
@@ -102,6 +118,7 @@ Eigen::ArrayXd Metropolis(Eigen::ArrayXd &A, int n, params &p)
     }
 }
 
+// Collect n_conf configurations, separated by n_decor full Metropolis sweeps.
 Eigen::MatrixXd Sweep(Eigen::ArrayXd &A, params &p)
 {
     Eigen::MatrixXd samples = Eigen::MatrixXd::Zero(p.dof, p.n_conf);
@@ -121,6 +138,7 @@ Eigen::MatrixXd Sweep(Eigen::ArrayXd &A, params &p)
     return samples;
 }
 
+// Evolve the field for the configured number of thermalization sweeps.
 Eigen::ArrayXd Thermalization(Eigen::ArrayXd &A, params &p)
 {
     for (int i = 0; i < p.n_thermal; i++)
@@ -134,6 +152,7 @@ Eigen::ArrayXd Thermalization(Eigen::ArrayXd &A, params &p)
     return A;
 }
 
+// Tune the proposal width until the measured acceptance fraction is in range.
 Eigen::ArrayXd Calibrate(Eigen::ArrayXd &A, params &p)
 {
     double ratio = 0;
@@ -161,6 +180,7 @@ Eigen::ArrayXd Calibrate(Eigen::ArrayXd &A, params &p)
     return A;
 }
 
+// Parse lattice/coupling/sample arguments and write header plus configuration data.
 int main(int argc, char **argv)
 {
 

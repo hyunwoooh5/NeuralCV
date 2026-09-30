@@ -1,10 +1,28 @@
 #!/usr/bin/env python
+"""Estimate weighted means and uncertainties with block bootstrapping.
+
+``bootstrap`` accepts a sample array and optional weights and returns its
+weighted mean and bootstrap error. As a script, this reads whitespace-separated
+complex values from stdin (first column: reweighting factors; remaining columns:
+observables) and prints estimates to stdout.
+"""
 
 import numpy as np
 import sys
 from cmath import phase
 
 def bootstrap(xs, ws=None, N=100, Bs=50):
+    """Return a weighted block-bootstrap mean and complex-valued standard error.
+
+    Args:
+        xs: Samples along the leading axis.
+        ws: Optional per-sample weights; unit weights are used when omitted.
+        N: Number of bootstrap resamples.
+        Bs: Number of blocks used to form block means.
+
+    Returns:
+        A pair containing the weighted mean and real/imaginary bootstrap error.
+    """
     if Bs > len(xs):
         Bs = len(xs)
     B = len(xs)//Bs

@@ -1,4 +1,11 @@
 #!/usr/bin/env python
+"""Train contour-deformation control variates for scalar or gauge models.
+
+The command-line inputs are a model-expression file, a pickled configuration
+array, and a destination for the control-variate pickle, plus training options.
+The script prints training estimates and periodically writes the trained model
+and parameters to the destination.
+"""
 
 from models import scalar, gauge
 import pickle
@@ -22,15 +29,19 @@ jax.config.update("jax_debug_infs", True)
 
 @jax.jit
 def arcsinh(x: any) -> any:
+    """Apply the inverse hyperbolic sine to a JAX value."""
     return jnp.arcsinh(x)
 
 
 @jax.jit
 def sinh(x: any) -> any:
+    """Apply the hyperbolic sine to a JAX value."""
     return jnp.sinh(x)
 
 
 class MLP(nn.Module):
+    """Dense network mapping a configuration vector to a contour shift."""
+
     volume: int
     features: Sequence[int]
     kernel_init: Callable = nn.initializers.variance_scaling(
@@ -39,6 +50,7 @@ class MLP(nn.Module):
 
     @nn.compact
     def __call__(self, x):
+        """Map the input vector through CELU hidden layers to a shift vector."""
         for feat in self.features:
             x = nn.Dense(feat, use_bias=False,
                          kernel_init=self.kernel_init,
@@ -50,32 +62,41 @@ class MLP(nn.Module):
 
 
 class ConstantShift(nn.Module):
+    """Learnable configuration-independent shift and scalar offset."""
+
     volume: int
 
     @nn.compact
     def __call__(self, x):
+        """Return a learned shift shaped like ``x`` and a scalar bias parameter."""
         shift = self.param('shift', nn.initializers.zeros, x.shape)
         y = self.param('bias', nn.initializers.zeros, (1,))
         return shift, y
 
 
 class CV_MLP(nn.Module):
+    """Dense neural control variate returning a vector field and scalar bias."""
+
     volume: int
     features: Sequence[int]
 
     @nn.compact
     def __call__(self, x):
+        """Evaluate the learned vector field and return it with its bias."""
         x = MLP(self.volume, self.features)(x)
         y = self.param('bias', nn.initializers.zeros, (1,))
         return x, y
 
 
 class CV_MLP_Periodic(nn.Module):
+    """Periodic dense control variate using sine-transformed input coordinates."""
+
     volume: int
     features: Sequence[int]
 
     @nn.compact
     def __call__(self, x):
+        """Evaluate a periodic vector field and return it with its bias parameter."""
         input = jnp.sin(x)
 
         x = MLP(self.volume, self.features)(input)
@@ -84,6 +105,8 @@ class CV_MLP_Periodic(nn.Module):
 
 
 class CNN(nn.Module):
+    """Convolutional feature extractor followed by a dense shift projection."""
+
     volume: int
     features: Sequence[int]
     kernel_init: Callable = nn.initializers.variance_scaling(
@@ -92,6 +115,7 @@ class CNN(nn.Module):
 
     @nn.compact
     def __call__(self, x):
+        """Map a spatial input through circular convolutions to a shift vector."""
         for feat in self.features:
             x = nn.Conv(feat, kernel_size=(3, 3), kernel_init=self.kernel_init,
                         bias_init=self.bias_init, padding='CIRCULAR')(x)  # Periodic boundary
@@ -107,12 +131,15 @@ class CNN(nn.Module):
 
 
 class CV_CNN(nn.Module):
+    """Two-dimensional convolutional control-variate model."""
+
     volume: int
     length: int
     features: Sequence[int]
 
     @nn.compact
     def __call__(self, x):
+        """Reshape a flat configuration to a square image and evaluate the CNN."""
         x = x.reshape(self.length, self.length, 1)
         x = CNN(self.volume, self.features)(x)
         return x

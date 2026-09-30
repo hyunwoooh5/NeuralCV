@@ -1,4 +1,11 @@
 #!/usr/bin/env python
+"""Generate scalar phi-four configurations with Metropolis and cluster updates.
+
+The CLI takes a lattice-shape tuple, mass-squared, quartic coupling, and output
+path, with options for sample count, skipped sweeps, thermalization, and seed.
+It writes the sampled field array as a NumPy ``.npy`` file; progress is not
+otherwise written to a result stream.
+"""
 
 import numpy as np
 from scipy.sparse import coo_matrix
@@ -143,6 +150,7 @@ class ScalarFieldTheory:
         self.phi *= flip_map
 
     def calibrate(self):
+        """Tune the local proposal width until sweep acceptance is within [0.3, 0.55]."""
         # Adjust delta
         acceptance_rate = self.metropolis_sweep()
         while acceptance_rate < 0.3 or acceptance_rate > 0.55:

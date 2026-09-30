@@ -1,3 +1,11 @@
+"""Staggered-fermion and Wilson formulations of the lattice Thirring model.
+
+Construct a model from lattice sizes and physical couplings, then pass a
+flattened gauge-field array to its matrix, action, density, condensate, or
+correlator methods. Methods return JAX matrices or observable arrays; this
+module does not perform file I/O.
+"""
+
 from dataclasses import dataclass
 
 import jax
@@ -7,15 +15,19 @@ import numpy as np
 
 @dataclass
 class Lattice:
+    """Periodic space-time geometry for two-component fermion fields."""
+
     L: int
     beta: int
 
     def __post_init__(self):
+        """Compute lattice volume, field degrees of freedom, and contour flag."""
         self.V = self.L * self.beta
         self.dof = 2*self.V
         self.periodic_contour = True
 
     def idx(self, t, x):
+        """Return the wrapped flattened site index for time ``t`` and position ``x``."""
         return (t % self.beta)*self.L + (x % self.L)
 
     def sites(self):
@@ -24,6 +36,7 @@ class Lattice:
         return jnp.indices((self.beta, self.L))
 
     def coords(self, i):
+        """Convert a flattened site index to its ``(time, position)`` coordinates."""
         t = i//self.L
         x = i % self.L
         return t, x
@@ -31,6 +44,8 @@ class Lattice:
 
 @dataclass
 class StaggeredModel:
+    """Staggered-fermion Thirring model with chemical potential ``mu``."""
+
     L: int
     nt: int
     m: float
@@ -38,6 +53,7 @@ class StaggeredModel:
     mu: float
 
     def __post_init__(self):
+        """Create lattice metadata and expose the model's field shape and size."""
         self.lattice = Lattice(self.L, self.nt)
 
         # backward compatibility
@@ -46,11 +62,13 @@ class StaggeredModel:
         self.shape = (self.nt, self.L, 2)
 
     def M_old(self, A):
+        """Construct the staggered fermion matrix for gauge field ``A``."""
         idx = self.lattice.idx
         A = A.reshape((self.lattice.beta, self.lattice.L, 2))
         M = self.m*jnp.eye(self.lattice.beta*self.lattice.L) + 0j
 
         def update_at(M, t, x):
+            """Insert the staggered forward/backward hops at one lattice site."""
             eta0 = jax.lax.cond(t == self.lattice.beta-1,
                                 lambda x: -x, lambda x: x, 1.)  # Anti-periodic BC for time direction
             eta1 = (-1)**t
@@ -69,6 +87,7 @@ class StaggeredModel:
         xs = jnp.ravel(xs)
 
         def update_at_i(i, M):
+            """Update the fermion matrix at the flattened site index ``i``."""
             return update_at(M, ts[i], xs[i])
         M = jax.lax.fori_loop(0, len(ts), update_at_i, M)
         if False:
@@ -79,30 +98,37 @@ class StaggeredModel:
 
     # Not implemented yet
     def M_component(self, A, t, x, tp, xp):
+        """Return one staggered matrix element between two space-time sites."""
         A = A.reshape((self.lattice.beta, self.lattice.L, 2))
 
         def diag(t, x):
+            """Return the on-site staggered matrix element."""
             return self.m + 0j
 
         def t_p(t, x):
+            """Return the forward temporal staggered hopping coefficient."""
             eta0 = jax.lax.cond(t == self.lattice.beta-1,
                                 lambda x: -x, lambda x: x, 1.)
             return -eta0/2 * jnp.exp(-self.mu - 1j*A[t, x, 0])
 
         def t_m(t, x):
+            """Return the backward temporal staggered hopping coefficient."""
             eta0 = jax.lax.cond(t == self.lattice.beta-1,
                                 lambda x: -x, lambda x: x, 1.)
             return eta0/2 * jnp.exp(self.mu + 1j*A[t, x, 0])
 
         def x_p(t, x):
+            """Return the forward spatial staggered hopping coefficient."""
             eta1 = (-1)**t
             return -eta1/2 * jnp.exp(-1j*A[t, x, 1])
 
         def x_m(t, x):
+            """Return the backward spatial staggered hopping coefficient."""
             eta1 = (-1)**t
             return eta1/2 * jnp.exp(1j*A[t, x, 1])
 
         def nada(t, x):
+            """Return zero for site pairs that are not nearest neighbors."""
             return 0.j
 
         dt = (tp-t) % self.lattice.beta
@@ -121,21 +147,25 @@ class StaggeredModel:
         return ret
 
     def M(self, A):
+        """Return the active staggered fermion matrix for gauge field ``A``."""
         return self.M_old(A)
         t, x = jnp.indices((self.lattice.beta, self.lattice.L))
         t, x = t.ravel(), x.ravel()
         return jax.vmap(lambda tp, xp: jax.vmap(lambda t, x: self.K_component(A, tp, xp, t, x))(t, x))(t, x)
 
     def action(self, A):
+        """Return the gauge action plus the staggered fermion determinant contribution."""
         s, logdet = jnp.linalg.slogdet(self.M(A))
         return 2./(self.g2) * jnp.sum(1-jnp.cos(A)) - jnp.log(s) - logdet
 
     def density(self, A):
+        """Return the number density computed from the inverse staggered matrix."""
         idx = self.lattice.idx
         Minv = jnp.linalg.inv(self.M(A))
         A = A.reshape((self.lattice.beta, self.lattice.L, 2))
 
         def n_at(t, x):
+            """Compute the temporal-link density contribution at site ``(t, x)``."""
             eta0 = jax.lax.cond(t == self.lattice.beta-1,
                                 lambda x: -x, lambda x: x, 1.)
             n = eta0/2 * jnp.exp(self.mu + 1j * A[t, x, 0]) * \
@@ -150,12 +180,14 @@ class StaggeredModel:
         return dens / (self.lattice.beta*self.lattice.L)
 
     def chiral_condensate(self, A):
+        """Return the normalized trace of the inverse staggered fermion matrix."""
         Minv = jnp.linalg.inv(self.M(A))
         A = A.reshape((self.lattice.beta, self.lattice.L, 2))
 
         return jnp.trace(Minv) / (self.lattice.beta*self.lattice.L)
 
     def correlator_f(self, A):
+        """Return the time-separated fermion correlator for each temporal displacement."""
         idx = self.lattice.idx
         Minv = jnp.linalg.inv(self.M(A))
 
@@ -165,6 +197,7 @@ class StaggeredModel:
         return jnp.array([jnp.sum(jax.vmap(lambda a, y, yp: jax.lax.select(t+a >= self.nt, -1, 1) * Minv[idx(t+a, y), idx(0+a, yp)])(tp, x, xp)) for t in range(self.nt)])
 
     def correlator_b(self, A):
+        """Return the time-separated bilinear correlator for each temporal displacement."""
         idx = self.lattice.idx
         Minv = jnp.linalg.inv(self.M(A))
 
@@ -174,11 +207,14 @@ class StaggeredModel:
         return jnp.array([jnp.sum(jax.vmap(lambda a, y, yp: (-1)**(t+y+0+yp) * Minv[idx(t+a, y), idx(0+a, yp)] * Minv[idx(0+a, yp), idx(t+a, y)])(tp, x, xp)) for t in range(self.nt)])
 
     def observe(self, A):
+        """Return the density as a one-element observable array."""
         return jnp.array([self.density(A)])
 
 
 @dataclass
 class WilsonModel:
+    """Wilson-fermion Thirring model with space-time gauge links."""
+
     L: int
     nt: int
     m: float
@@ -186,6 +222,7 @@ class WilsonModel:
     mu: float
 
     def __post_init__(self):
+        """Initialize lattice metadata, hopping parameter, and chemical-potential matrices."""
         self.lattice = Lattice(self.L, self.nt)
 
         # backward compatibility
@@ -200,11 +237,13 @@ class WilsonModel:
         self.pp = self.pp.at[0].multiply(jnp.exp(-self.mu))
 
     def M_old(self, A):
+        """Construct the Wilson fermion matrix using the original link convention."""
         idx = self.lattice.idx
         A = A.reshape((self.lattice.beta, self.lattice.L, 2))
         M = jnp.eye(2*self.lattice.beta*self.lattice.L) + 0j
 
         def update_at(M, t, x):
+            """Insert the Wilson forward/backward spin hopping blocks at one site."""
             bc = jax.lax.cond(t == self.lattice.beta-1,
                               lambda x: -x, lambda x: x, 1.)  # Anti-periodic BC for time direction
             M = jax.lax.dynamic_update_slice(
@@ -223,6 +262,7 @@ class WilsonModel:
         xs = jnp.ravel(xs)
 
         def update_at_i(i, K):
+            """Update the Wilson matrix at the flattened site index ``i``."""
             return update_at(K, ts[i], xs[i])
         M = jax.lax.fori_loop(0, len(ts), update_at_i, M)
 
@@ -230,12 +270,14 @@ class WilsonModel:
 
     # different convention
     def M_old2(self, A):
+        """Construct the Wilson matrix with antiperiodicity encoded in the final time links."""
         idx = self.lattice.idx
         A = A.reshape((self.lattice.beta, self.lattice.L, 2))
         A = A.at[-1, :, 0].add(jnp.pi)  # Anti-periodic BC for time direction
         M = jnp.eye(2*self.lattice.beta*self.lattice.L) + 0j
 
         def update_at(M, t, x):
+            """Insert Wilson hopping blocks using the alternate boundary convention."""
             M = jax.lax.dynamic_update_slice(
                 M, -self.kappa * self.pm[0] * jnp.exp(1j*A[t, x, 0]), (2*idx(t, x), 2*idx(t+1, x)))
             M = jax.lax.dynamic_update_slice(
@@ -252,6 +294,7 @@ class WilsonModel:
         xs = jnp.ravel(xs)
 
         def update_at_i(i, M):
+            """Update the alternate-convention Wilson matrix at site ``i``."""
             return update_at(M, ts[i], xs[i])
         M = jax.lax.fori_loop(0, len(ts), update_at_i, M)
 
@@ -259,30 +302,37 @@ class WilsonModel:
 
     # Not implemented yet
     def M_component(self, A, t, x, tp, xp):
+        """Return one Wilson matrix element connecting sites ``(t,x)`` and ``(tp,xp)``."""
         A = A.reshape((self.lattice.beta, self.lattice.L, 2))
 
         def diag(t, x):
+            """Return the on-site Wilson matrix element."""
             return 1.0
 
         def t_p(t, x):
+            """Return the forward temporal Wilson hopping coefficient."""
             eta0 = jax.lax.cond(t == self.lattice.beta-1,
                                 lambda x: -x, lambda x: x, 1.)
             return -eta0/2 * jnp.exp(-self.mu - 1j*A[t, x, 0])
 
         def t_m(t, x):
+            """Return the backward temporal Wilson hopping coefficient."""
             eta0 = jax.lax.cond(t == self.lattice.beta-1,
                                 lambda x: -x, lambda x: x, 1.)
             return eta0/2 * jnp.exp(self.mu + 1j*A[t, x, 0])
 
         def x_p(t, x):
+            """Return the forward spatial Wilson hopping coefficient."""
             eta1 = (-1)**t
             return -eta1/2 * jnp.exp(-1j*A[t, x, 1])
 
         def x_m(t, x):
+            """Return the backward spatial Wilson hopping coefficient."""
             eta1 = (-1)**t
             return eta1/2 * jnp.exp(1j*A[t, x, 1])
 
         def nada(t, x):
+            """Return zero for site pairs that are not nearest neighbors."""
             return 0.j
 
         dt = (tp-t) % self.lattice.beta
@@ -301,21 +351,25 @@ class WilsonModel:
         return ret
 
     def M(self, A):
+        """Return the active Wilson fermion matrix for gauge field ``A``."""
         return self.M_old(A)
         t, x = jnp.indices((self.lattice.beta, self.lattice.L))
         t, x = t.ravel(), x.ravel()
         return jax.vmap(lambda tp, xp: jax.vmap(lambda t, x: self.M_component(A, tp, xp, t, x))(t, x))(t, x)
 
     def action(self, A):
+        """Return twice the gauge-plus-fermion effective action for ``A``."""
         s, logdet = jnp.linalg.slogdet(self.M(A))
         return 2. * (1./(self.g2) * jnp.sum(1-jnp.cos(A)) - jnp.log(s) - logdet)
 
     def chiral_condensate(self, A):
+        """Return the normalized trace of the inverse Wilson fermion matrix."""
         Minv = jnp.linalg.inv(self.M(A))
 
         return Minv.trace()/self.lattice.V
 
     def density(self, A):
+        """Return the spatially and temporally averaged Wilson number density."""
         idx = self.lattice.idx
         Minv = jnp.linalg.inv(self.M(A))
         gamma_0 = jnp.array([[0, 1], [1, 0]])
@@ -327,6 +381,7 @@ class WilsonModel:
             Minv, (2*idx(a, b), 2*idx(a, b)), (2, 2))@gamma_0))(t, x))
 
     def correlator_f(self, A):
+        """Return the Wilson fermion correlator for each temporal displacement."""
         idx = self.lattice.idx
         Minv = jnp.linalg.inv(self.M(A))
 
@@ -336,6 +391,7 @@ class WilsonModel:
         return jnp.array([jnp.sum(jax.vmap(lambda a, y, yp: jax.lax.select(t+a >= self.nt, -1, 1) * jnp.trace(jax.lax.dynamic_slice(Minv, (2*idx(t+a, y), 2*idx(0+a, yp)), (2, 2))))(tp, x, xp)) for t in range(self.nt)])
 
     def correlator_b(self, A):
+        """Return the Wilson bilinear correlator for each temporal displacement."""
         idx = self.lattice.idx
         Minv = jnp.linalg.inv(self.M(A))
         gamma_5 = jnp.array([[0, -1j], [1j, 0]])
@@ -346,4 +402,5 @@ class WilsonModel:
         return jnp.array([jnp.sum(jax.vmap(lambda a, y, yp: jnp.trace(gamma_5 @ jax.lax.dynamic_slice(Minv, (2*idx(t+a, y), 2*idx(0+a, yp)), (2, 2)) @ gamma_5 @ jax.lax.dynamic_slice(Minv, (2*idx(0+a, yp), 2*idx(t+a, y)), (2, 2))))(tp, x, xp)) for t in range(self.nt)])
 
     def observe(self, A):
+        """Return the density as a one-element observable array."""
         return jnp.array([self.density(A)])

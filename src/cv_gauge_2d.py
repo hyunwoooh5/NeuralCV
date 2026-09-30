@@ -1,4 +1,11 @@
 #!/usr/bin/env python
+"""Train a neural control variate for a two-dimensional gauge observable.
+
+The command-line inputs are a model-expression file, a pickled configuration
+array, and a destination for the control-variate pickle, plus training options.
+Training diagnostics are printed to stdout and the current model and parameters
+are periodically written to the destination.
+"""
 
 from models import gauge
 import pickle
@@ -22,14 +29,18 @@ jax.config.update("jax_debug_infs", True)
 
 
 def arcsinh(x: any) -> any:
+    """Apply the inverse hyperbolic sine to a JAX value."""
     return jnp.arcsinh(x)
 
 
 def sinh(x: any) -> any:
+    """Apply the hyperbolic sine to a JAX value."""
     return jnp.sinh(x)
 
 
 class MLP(nn.Module):
+    """Dense network mapping gauge configurations to a scalar field component."""
+
     volume: int
     features: Sequence[int]
     kernel_init: Callable = nn.initializers.variance_scaling(
@@ -38,6 +49,7 @@ class MLP(nn.Module):
 
     @nn.compact
     def __call__(self, x):
+        """Evaluate the dense network on a flattened configuration vector."""
         for feat in self.features:
             x = nn.Dense(feat, use_bias=False,
                          kernel_init=self.kernel_init,
@@ -49,22 +61,28 @@ class MLP(nn.Module):
 
 
 class CV_MLP(nn.Module):
+    """Dense scalar control variate with a learned additive bias."""
+
     volume: int
     features: Sequence[int]
 
     @nn.compact
     def __call__(self, x):
+        """Return the learned vector field and scalar bias for ``x``."""
         x = MLP(self.volume, self.features)(x)
         y = self.param('bias', nn.initializers.zeros, (1,))
         return x, y
 
 
 class CV_MLP_Periodic(nn.Module):
+    """Periodic scalar control variate built from sine and cosine features."""
+
     volume: int
     features: Sequence[int]
 
     @nn.compact
     def __call__(self, x):
+        """Encode angles periodically and return the vector field with its bias."""
         x = jnp.ravel(jnp.array([jnp.sin(x), jnp.cos(x)]))
 
         x = MLP(self.volume, self.features)(x)
@@ -73,6 +91,8 @@ class CV_MLP_Periodic(nn.Module):
 
 
 class CNN(nn.Module):
+    """Circular-convolution network producing a flattened gauge vector field."""
+
     volume: int
     features: Sequence[int]
     kernel_init: Callable = nn.initializers.variance_scaling(
@@ -81,6 +101,7 @@ class CNN(nn.Module):
 
     @nn.compact
     def __call__(self, x):
+        """Map a spatial link field through periodic convolutions to outputs and bias."""
         for feat in self.features:
             x = nn.Conv(feat, kernel_size=(3, 3), use_bias=True, kernel_init=self.kernel_init,
                         # Periodic boundary
@@ -97,16 +118,20 @@ class CNN(nn.Module):
 
 
 class CV_CNN(nn.Module):
+    """Convolutional control variate for a two-dimensional gauge configuration."""
+
     volume: int
     features: Sequence[int]
 
     def __post_init__(self):
+        """Initialize parity masks and complete Flax module initialization."""
         self.mask_odd = jnp.arange(self.volume) % 2+0.
         self.mask_even = 1. - self.mask_odd
         super().__post_init__()
 
     @nn.compact
     def __call__(self, x, shape):
+        """Reshape a flat configuration to ``shape`` and evaluate the convolutional model."""
         # x = jnp.exp(1j*x)
         x = x.reshape(shape)
         # x_odd = self.mask_odd*x

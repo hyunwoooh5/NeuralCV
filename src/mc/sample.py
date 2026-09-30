@@ -1,4 +1,11 @@
 #!/usr/bin/env python
+"""Generate configurations using a selected model and Monte Carlo chain.
+
+The CLI reads a model-expression file and writes sampled configurations as a
+pickle to the requested output path. Options select Metropolis, local
+Metropolis, HMC, or replica exchange; observables and acceptance statistics are
+printed to stdout. The output is checkpointed every 1,000 samples.
+"""
 
 import sys
 sys.path.append('../CVML')
@@ -71,6 +78,7 @@ if args.hmc:
 
 @jax.jit
 def observe(x):
+    """Pair unit phase weight with the configured model observable for one state."""
     return 1.0, model.observe(x)
 
 
@@ -96,6 +104,7 @@ configs = []
 
 
 def save():
+    """Write accumulated configurations to the requested pickle output path."""
     with open(args.cf, 'wb') as f:
         pickle.dump(jnp.array(configs), f)
 

@@ -1,4 +1,11 @@
 #!/usr/bin/env python
+"""U(1) gauge-field heat-bath updates and a configuration-generation CLI.
+
+The update functions take complex link arrays, couplings, lattice indices, and
+a NumPy random generator; they return updated links or plaquette averages. The
+CLI reads a model-expression file and writes sampled link angles as a NumPy
+``.npy`` array, while reporting plaquette and acceptance estimates to stdout.
+"""
 
 import numpy as np
 import argparse
@@ -44,13 +51,15 @@ def sample_angle(a, rng):
     tmp = np.arctan(np.tanh(0.5 * np.pi * alpha) / beta_s)
 
     def h(x):
-        # Map x in [0,1] to an angle.
+        """Map a uniform variate on [0, 1] to a candidate angle."""
         return (2.0 / alpha) * np.arctanh(beta_s * np.tan((2 * x - 1) * tmp))
 
     def G(x):
+        """Evaluate the rejection-sampling correction exponent at ``x``."""
         return 1.0 - np.cos(x) - (1.0 / a) * np.log(1 + (np.cosh(alpha * x) - 1) / (1 + beta_tilde))
 
     def gg(x):
+        """Return the candidate acceptance probability at ``x``."""
         return np.exp(-a * G(h(x)))
 
     # Worst acceptance ratio is 0.88 when a -> \infty

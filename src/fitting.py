@@ -1,3 +1,12 @@
+"""Fit parameterized models to data and report fit quality and uncertainties.
+
+``fit_model_jax`` takes x/y data, errors or a covariance matrix, a JAX-compatible
+model function, and initial parameters; it returns a dictionary with the best
+fit, covariance and Hessian results, chi-square, and degrees of freedom.
+``print_fit_report`` takes that dictionary and writes a formatted report to
+stdout. This module does not read or write data files itself.
+"""
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -66,12 +75,14 @@ def fit_model_jax(data, cov_matrix_or_errors, fitting_function, initial_params,
     # Define vectorized model prediction for fast execution
     @jax.jit
     def model_preds(params):
+        """Evaluate the fitting function at every selected x value."""
         # Maps the fitting_function over x_data, keeping params constant
         return jax.vmap(fitting_function, in_axes=(0, None))(x_data, params)
 
     # Define Chi-square objective function
     @jax.jit
     def chi2(params):
+        """Compute the covariance-weighted residual objective."""
         residuals = model_preds(params) - y_data
         return residuals.T @ inv_cov_matrix @ residuals + priors
 
@@ -80,6 +91,7 @@ def fit_model_jax(data, cov_matrix_or_errors, fitting_function, initial_params,
     
     # Wrapper for SciPy minimize (SciPy expects float64 numpy arrays, not JAX arrays)
     def scipy_objective(p):
+        """Return the scalar objective and gradient in SciPy-compatible arrays."""
         val, grad = chi2_val_and_grad(jnp.array(p))
         return np.array(val), np.array(grad)
 

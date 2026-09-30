@@ -1,3 +1,11 @@
+"""Statistical estimators and training helpers for lattice configurations.
+
+The estimators accept sample arrays and optional weights and return means,
+errors, covariance matrices, or effective masses. Regularization helpers accept
+JAX arrays or parameter pytrees and return scalar penalties or masks. The
+functions operate in memory and do not read or write files.
+"""
+
 import numpy as np
 import jax
 import jax.numpy as jnp
@@ -5,6 +13,12 @@ import flax
 
 
 def jackknife(xs, ws=None, Bs=50):  # Bs: Block size
+    """Estimate a weighted mean and its block-jackknife standard error.
+
+    ``xs`` and optional ``ws`` are sample arrays with samples on axis zero;
+    ``Bs`` is the number of blocks. Returns ``(mean, error)`` and drops any
+    trailing samples that do not fill a complete block.
+    """
     B = len(xs)//Bs  # number of blocks
     if ws is None:  # for reweighting
         ws = xs*0 + 1
@@ -28,6 +42,11 @@ def jackknife(xs, ws=None, Bs=50):  # Bs: Block size
 
 
 def jackknife_cov(data, Bs=50):  # Bs: Block size
+    """Return the block-jackknife covariance matrix for ``(sample, time)`` data.
+
+    ``Bs`` is the block size in configurations. Trailing incomplete blocks are
+    discarded; the returned JAX array has shape ``(n_time, n_time)``.
+    """
     N_conf, T = data.shape
 
     B = N_conf//Bs  # number of blocks
@@ -61,6 +80,11 @@ def jackknife_cov(data, Bs=50):  # Bs: Block size
 
 
 def jackknife_effmass(xs, Bs=50):  # Bs: Block size
+    """Compute the correlator effective-mass mean and block-jackknife errors.
+
+    ``xs`` has shape ``(n_configurations, n_times)`` and ``Bs`` is the block
+    size. Returns arrays for adjacent-time log ratios and their errors.
+    """
     N_conf, T = xs.shape
 
     B = len(xs)//Bs  # number of blocks
@@ -88,6 +112,11 @@ def jackknife_effmass(xs, Bs=50):  # Bs: Block size
 
 
 def bin(xs, ws=None, Bs=50):  # Bs: Block size
+    """Return the weighted sample mean and error estimated from block means.
+
+    ``xs`` and optional ``ws`` have configurations on axis zero. ``Bs`` is the
+    number of blocks; incomplete trailing samples are ignored.
+    """
     B = len(xs)//Bs  # number of blocks
     if ws is None:  # for reweighting
         ws = xs*0 + 1
@@ -110,6 +139,11 @@ def bin(xs, ws=None, Bs=50):  # Bs: Block size
 
 
 def bootstrap(xs, ws=None, N=100, Bs=50):
+    """Return a weighted block-bootstrap mean and standard error.
+
+    ``xs`` and optional ``ws`` have samples on axis zero; ``N`` controls the
+    number of resamples and ``Bs`` the block size. Returns ``(mean, error)``.
+    """
     if Bs > len(xs):
         Bs = len(xs)
     B = len(xs)//Bs
@@ -135,14 +169,17 @@ def bootstrap(xs, ws=None, N=100, Bs=50):
 
 # regularizations
 def l2_loss(x, alpha):
+    """Return ``alpha`` times the mean squared value of an array."""
     return alpha*(x**2).mean()
 
 
 def l1_loss(x, alpha):
+    """Return ``alpha`` times the mean absolute value of an array."""
     return alpha*(abs(x)).mean()
 
 
 def l2_regularization(params):
+    """Sum squared values of leaves named ``kernel`` in a Flax parameter tree."""
     # Flatten the nested parameter dict.
     flat_params = flax.traverse_util.flatten_dict(params)
     # Sum up the L2 norm of all parameters where the key ends with 'kernel'
@@ -152,6 +189,7 @@ def l2_regularization(params):
 
 
 def l1_regularization(params):
+    """Sum absolute values of leaves named ``kernel`` in a Flax parameter tree."""
     # Flatten the nested parameter dict.
     flat_params = flax.traverse_util.flatten_dict(params)
     # Sum up the L2 norm of all parameters where the key ends with 'kernel'
@@ -171,6 +209,11 @@ def decay_mask(params):
 
 
 def autocorr_time_fft(x, max_lag=None):
+    """Estimate integrated autocorrelation time using an FFT autocorrelation.
+
+    ``x`` is a one-dimensional sample series. ``max_lag`` optionally bounds
+    the initial-positive-sequence sum; returns the estimated integrated time.
+    """
     x = np.asarray(x)
     n = len(x)
     x = x - np.mean(x)

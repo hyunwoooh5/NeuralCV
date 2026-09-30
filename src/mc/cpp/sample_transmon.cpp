@@ -1,3 +1,12 @@
+/*
+Generate one-dimensional transmon phase configurations with local Metropolis
+updates.
+
+Inputs: time-slice count Nt, total time t, charging energy E_C, Josephson energy
+E_J, decorrelation sweeps, sample count, and output path. Output: binary file
+with dof and sample-count integers followed by sampled doubles in Eigen
+column-major order.
+*/
 #include <iostream>
 #include <random>
 #include <Eigen/Dense>
@@ -26,6 +35,7 @@ struct Index
     int x0, x1;
 };
 
+// Physical parameters and Monte Carlo controls for the transmon chain.
 struct params
 {
     int nt, dof;
@@ -50,6 +60,7 @@ Index Idx_inv(int n, int nx)
 }
 */
 
+// Return the complex log determinant and optionally store the matrix inverse.
 dcomp Log_Det(const Eigen::MatrixXcd &m, Eigen::MatrixXcd *inv = NULL)
 {
     Eigen::PartialPivLU<Eigen::MatrixXcd> lu(m); // LU decomposition of M
@@ -65,6 +76,7 @@ dcomp Log_Det(const Eigen::MatrixXcd &m, Eigen::MatrixXcd *inv = NULL)
 }
 
 // Metropolis
+// Evaluate the complete periodic transmon action for phase configuration A.
 double Action(Eigen::ArrayXd &A, int n, params &p)
 {
     double pot, kin, diff;
@@ -89,6 +101,7 @@ double Action(Eigen::ArrayXd &A, int n, params &p)
 }
 
 
+// Evaluate the terms in the action that depend on phase component n.
 double Action_Local(Eigen::ArrayXd &A, int n, params &p)
 {
     /*
@@ -117,6 +130,7 @@ double Action_Local(Eigen::ArrayXd &A, int n, params &p)
 }
 
 
+// Propose and accept/reject a local phase change at component n.
 Eigen::ArrayXd Metropolis(Eigen::ArrayXd &A, int n, params &p)
 {
     Eigen::ArrayXd A_new = A;
@@ -135,6 +149,7 @@ Eigen::ArrayXd Metropolis(Eigen::ArrayXd &A, int n, params &p)
     }
 }
 
+// Collect n_conf phase configurations separated by n_decor sweeps.
 Eigen::MatrixXd Sweep(Eigen::ArrayXd &A, params &p)
 {
     Eigen::MatrixXd samples = Eigen::MatrixXd::Zero(p.dof, p.n_conf);
@@ -154,6 +169,7 @@ Eigen::MatrixXd Sweep(Eigen::ArrayXd &A, params &p)
     return samples;
 }
 
+// Apply the configured number of thermalization sweeps to the phase state.
 Eigen::ArrayXd Thermalization(Eigen::ArrayXd &A, params &p)
 {
     for (int i = 0; i < p.n_thermal; i++)
@@ -167,6 +183,7 @@ Eigen::ArrayXd Thermalization(Eigen::ArrayXd &A, params &p)
     return A;
 }
 
+// Tune the proposal width until the measured acceptance fraction is in range.
 Eigen::ArrayXd Calibrate(Eigen::ArrayXd &A, params &p)
 {
     double ratio = 0;
@@ -194,6 +211,7 @@ Eigen::ArrayXd Calibrate(Eigen::ArrayXd &A, params &p)
     return A;
 }
 
+// Parse transmon parameters and write a binary configuration file.
 int main(int argc, char **argv)
 {
 

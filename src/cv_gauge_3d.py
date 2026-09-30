@@ -1,4 +1,11 @@
 #!/usr/bin/env python
+"""Train a periodic neural control variate for three-dimensional gauge data.
+
+The command-line inputs are a model-expression file, a destination prefix, and
+a NumPy ``.npy`` configuration array, plus training options. The script prints
+training diagnostics and writes checkpoint and best-parameter pickles using the
+destination prefix.
+"""
 
 from models import gauge
 import pickle
@@ -32,14 +39,18 @@ jax.config.update("jax_default_matmul_precision", "highest")
 
 
 def arcsinh(x: any) -> any:
+    """Apply the inverse hyperbolic sine to a JAX value."""
     return jnp.arcsinh(x)
 
 
 def sinh(x: any) -> any:
+    """Apply the hyperbolic sine to a JAX value."""
     return jnp.sinh(x)
 
 
 class MLP(nn.Module):
+    """Dense network mapping periodic plaquette features to two components."""
+
     volume: int
     features: Sequence[int]
     bias: bool
@@ -49,6 +60,7 @@ class MLP(nn.Module):
 
     @nn.compact
     def __call__(self, x):
+        """Evaluate the configured dense layers and return a two-component output."""
         for feat in self.features:
             x = nn.Dense(feat, use_bias=self.bias,
                          kernel_init=self.kernel_init,
@@ -62,12 +74,15 @@ class MLP(nn.Module):
 
 
 class CV_MLP_Periodic(nn.Module):
+    """Periodic control variate formed from powers of complex plaquettes."""
+
     volume: int
     features: Sequence[int]
     n: int
 
     @nn.compact
     def __call__(self, x):
+        """Build periodic plaquette features and return the learned field and bias."""
         pl = model.plaquette(x)
 
         powers = jnp.array([pl**i for i in range(1, self.n+1)])

@@ -1,3 +1,11 @@
+/*
+Generate two-dimensional open-boundary SU(2) configurations using Euler-angle
+coordinates and Metropolis updates.
+
+Inputs: coupling g, sample count, and output path; lattice geometry is defined
+in this source. Output: binary file with dof and sample-count integers followed
+by sampled doubles in Eigen column-major order.
+*/
 #include <iostream>
 #include <random>
 #include <Eigen/Dense>
@@ -19,6 +27,7 @@ std::uniform_real_distribution<> rand01(0.0, 1.0);      // For Metropolis
 int accept = 0; // For acceptance rate, Should not be defined again
 
 // Functions
+// SU(2) model coupling and Monte Carlo run controls.
 struct params
 {
     int dof;
@@ -26,6 +35,7 @@ struct params
     int n_thermal, n_conf;
 };
 
+// Return the complex log determinant and optionally store the matrix inverse.
 dcomp Log_Det(const Eigen::MatrixXcd &m, Eigen::MatrixXcd *inv = NULL)
 {
     Eigen::PartialPivLU<Eigen::MatrixXcd> lu(m); // LU decomposition of M
@@ -41,6 +51,7 @@ dcomp Log_Det(const Eigen::MatrixXcd &m, Eigen::MatrixXcd *inv = NULL)
 }
 
 // Metropolis
+// Evaluate the Euler-coordinate action for the current SU(2) angle vector.
 double Action(Eigen::ArrayXd &A, params &p)
 {
     if (A[1] < 0 || A[1] > PI)
@@ -53,6 +64,7 @@ double Action(Eigen::ArrayXd &A, params &p)
     }
 }
 
+// Propose a Gaussian change to the angle vector and apply Metropolis acceptance.
 Eigen::ArrayXd Metropolis(Eigen::ArrayXd &A, params &p)
 {
     Eigen::ArrayXd A_new = A + p.delta * Eigen::ArrayXd::NullaryExpr(p.dof, [&]()
@@ -72,6 +84,7 @@ Eigen::ArrayXd Metropolis(Eigen::ArrayXd &A, params &p)
     }
 }
 
+// Collect n_conf states separated by decorrelation sweeps.
 Eigen::MatrixXd Sweep(Eigen::ArrayXd &A, params &p)
 {
     Eigen::MatrixXd samples = Eigen::MatrixXd::Zero(p.dof, p.n_conf);
@@ -91,6 +104,7 @@ Eigen::MatrixXd Sweep(Eigen::ArrayXd &A, params &p)
     return samples;
 }
 
+// Evolve the configuration for the configured thermalization interval.
 Eigen::ArrayXd Thermalization(Eigen::ArrayXd &A, params &p)
 {
     for (int i = 0; i < p.dof * p.n_thermal; i++)
@@ -101,6 +115,7 @@ Eigen::ArrayXd Thermalization(Eigen::ArrayXd &A, params &p)
     return A;
 }
 
+// Tune the proposal width until the measured acceptance fraction is in range.
 Eigen::ArrayXd Calibrate(Eigen::ArrayXd &A, params &p)
 {
     double ratio = 0;
@@ -125,6 +140,7 @@ Eigen::ArrayXd Calibrate(Eigen::ArrayXd &A, params &p)
     return A;
 }
 
+// Parse coupling/sample/output arguments and write a binary sample file.
 int main(int argc, char **argv)
 {
     struct params p;

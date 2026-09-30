@@ -1,3 +1,11 @@
+/*
+Generate two-dimensional periodic-boundary U(1) gauge configurations with
+local Metropolis updates.
+
+Inputs: nt, nx, coupling beta, decorrelation sweeps, sample count, and output
+path. Output: binary file with dof and sample-count integers followed by
+sampled doubles in Eigen column-major order.
+*/
 #include <iostream>
 #include <random>
 #include <Eigen/Dense>
@@ -19,11 +27,13 @@ std::uniform_real_distribution<> rand01(0.0, 1.0);      // For Metropolis
 int accept = 0; // For acceptance rate, Should not be defined again
 
 // Functions
+// Lattice coordinates and link direction for one periodic link.
 struct Index
 {
     int x0, x1, n;
 };
 
+// Simulation parameters for the periodic 2D U(1) link field.
 struct params
 {
     int nt, nx, dof;
@@ -31,11 +41,13 @@ struct params
     int n_decor, n_thermal, n_conf;
 };
 
+// Flatten a site coordinate and link direction on the periodic lattice.
 inline int Idx(int x0, int x1, int n, int nt, int nx)
 {
     return n + 2 * ((x1 % nx) + nx * (x0 % nt));
 }
 
+// Convert a flattened link index into site coordinates and direction.
 Index Idx_inv(int n, int nx)
 {
     struct Index idx;
@@ -45,6 +57,7 @@ Index Idx_inv(int n, int nx)
     return idx;
 }
 
+// Return the complex log determinant and optionally store the matrix inverse.
 dcomp Log_Det(const Eigen::MatrixXcd &m, Eigen::MatrixXcd *inv = NULL)
 {
     Eigen::PartialPivLU<Eigen::MatrixXcd> lu(m); // LU decomposition of M
@@ -60,11 +73,13 @@ dcomp Log_Det(const Eigen::MatrixXcd &m, Eigen::MatrixXcd *inv = NULL)
 }
 
 // Metropolis
+// Placeholder for the full action; updates use the local plaquette action below.
 double Action(Eigen::ArrayXd &A)
 {
     return 0;
 }
 
+// Evaluate the local plaquette action terms affected by link n.
 double Action_Local(Eigen::ArrayXd &A, int n, params &p)
 {
     struct Index idx = Idx_inv(n, p.nx);
@@ -81,6 +96,7 @@ double Action_Local(Eigen::ArrayXd &A, int n, params &p)
     return p.beta * (1. - cos(p1) + 1. - cos(p2));
 }
 
+// Propose and accept/reject an update to link angle n, wrapping accepted angles.
 Eigen::ArrayXd Metropolis(Eigen::ArrayXd &A, int n, params &p)
 {
     Eigen::ArrayXd A_new = A;
@@ -99,6 +115,7 @@ Eigen::ArrayXd Metropolis(Eigen::ArrayXd &A, int n, params &p)
     }
 }
 
+// Collect n_conf configurations separated by n_decor Metropolis sweeps.
 Eigen::MatrixXd Sweep(Eigen::ArrayXd &A, params &p)
 {
     Eigen::MatrixXd samples = Eigen::MatrixXd::Zero(p.dof, p.n_conf);
@@ -118,6 +135,7 @@ Eigen::MatrixXd Sweep(Eigen::ArrayXd &A, params &p)
     return samples;
 }
 
+// Apply the configured number of thermalization sweeps to the state.
 Eigen::ArrayXd Thermalization(Eigen::ArrayXd &A, params &p)
 {
     for (int i = 0; i < p.n_thermal; i++)
@@ -131,6 +149,7 @@ Eigen::ArrayXd Thermalization(Eigen::ArrayXd &A, params &p)
     return A;
 }
 
+// Tune the proposal width until the measured acceptance fraction is in range.
 Eigen::ArrayXd Calibrate(Eigen::ArrayXd &A, params &p)
 {
     double ratio = 0;
@@ -158,6 +177,7 @@ Eigen::ArrayXd Calibrate(Eigen::ArrayXd &A, params &p)
     return A;
 }
 
+// Parse lattice/coupling/sample arguments and write header plus sampled angles.
 int main(int argc, char **argv)
 {
     struct params p;
