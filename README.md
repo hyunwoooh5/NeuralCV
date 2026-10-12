@@ -13,28 +13,38 @@ a training script.
   samplers, plus a scalar cluster sampler.
 - `src/mc/cpp/`: standalone C++ samplers and their Makefile.
 - `src/cv_*.py`: control-variate model definitions and training command-line
-	programs for scalar, gauge, and contour-deformation workflows.
+  programs for scalar, gauge, and contour-deformation workflows.
 - `src/gevp_utils.py`, `src/fitting.py`, `src/util.py`, and
-	`src/util_pytree.py`: correlator/GEVP analysis, fitting, statistics, and JAX
-	PyTree helpers.
+  `src/util_pytree.py`: correlator/GEVP analysis, fitting, statistics, and JAX
+  PyTree helpers.
 - `pub/`: publication code and notebooks. This directory is maintained
-	separately from the installable `src/` package.
+  separately from the installable `src/` package.
 
 ## Setup
 
-Use a virtual environment, then install the pinned dependencies and this
-repository in editable mode:
+This project uses `uv` for dependency management and project environment setup.
+Install `uv` if it is not already available, then sync the environment from the
+repository root:
 
 ```sh
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-python -m pip install -e .
+# macOS / Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# or: brew install uv
+
+uv sync
 ```
 
-Editable installation exposes the `src/` modules under their existing import
-names, including `models`, `mc`, and `util`. Python sampler and training
-commands below are run from the repository root.
+`uv sync` creates the project-local environment and installs the package in a
+way that keeps the repo ready to run from the project root. If you want to work
+inside the environment directly, activate the project venv after syncing:
+
+```sh
+source .venv/bin/activate
+```
+
+The `src/` modules remain importable under their existing names, including
+`models`, `mc`, and `util`, when running commands via `uv run` or inside the
+activated environment.
 
 ## Model Files
 
@@ -64,7 +74,7 @@ example, not a promise that every sampler/trainer accepts that model:
 
 ```sh
 mkdir -p data
-python src/mc/sample.py data/model.dat data/configs.pkl \
+uv run python src/mc/sample.py data/model.dat data/configs.pkl \
     --samples 2000 --skip 100 --seed 1
 ```
 
@@ -78,8 +88,9 @@ training invocation has this form; supply model and configuration files whose
 observable and data formats match the selected trainer:
 
 ```sh
-python src/cv_scalar.py data/compatible_model.dat data/control_variate.pkl \
-	data/compatible_configs.pkl --init --layers 1 --width 8 --learningrate 1e-3
+uv run python src/cv_scalar.py data/compatible_model.dat \
+    data/control_variate.pkl data/compatible_configs.pkl \
+    --init --layers 1 --width 8 --learningrate 1e-3
 ```
 
 Training runs continuously and prints periodic diagnostics; stop it with
@@ -92,14 +103,14 @@ cover distinct research workflows and are not interchangeable for every model.
 ## Configuration Formats
 
 - `src/mc/sample.py` writes a Python pickle containing its collected
-	configurations. The `src/cv_*.py` training scripts load their configuration
-	input with `pickle`.
+  configurations. The `src/cv_*.py` training scripts load their configuration
+  input with `pickle`.
 - `src/mc/heatbath_u1.py` and `src/mc/scalar_brower-tamayo.py` write NumPy `.npy`
-	arrays.
+  arrays.
 - The C++ programs in `src/mc/cpp/` write a custom binary format: two native
-	integers (`dof` and sample count), followed by configuration doubles in
-	Eigen column-major order. This is not a pickle or a `.npy` file and cannot be
-	passed directly to a Python training script expecting a pickle.
+  integers (`dof` and sample count), followed by configuration doubles in
+  Eigen column-major order. This is not a pickle or a `.npy` file and cannot be
+  passed directly to a Python training script expecting a pickle.
 
 ## C++ Samplers
 
@@ -113,11 +124,11 @@ and output path:
 ```sh
 brew install cli11 eigen
 make -C src/mc/cpp sample_scalar_2d \
-	EIGEN_INCLUDE="$(brew --prefix eigen)/include/eigen3" \
-	CLI11_INCLUDE="$(brew --prefix cli11)/include"
+  EIGEN_INCLUDE="$(brew --prefix eigen)/include/eigen3" \
+  CLI11_INCLUDE="$(brew --prefix cli11)/include"
 src/mc/cpp/sample_scalar_2d --nt 4 --nx 4 --mass-squared 0.01 --lambda 0.01 \
-	--decorrelation-sweeps 100 --thermalization-sweeps 10000 --samples 2000 \
-	--output data/scalar2d.bin --seed 12345
+  --decorrelation-sweeps 100 --thermalization-sweeps 10000 --samples 2000 \
+  --output data/scalar2d.bin --seed 12345
 ```
 
 `EIGEN_INCLUDE` defaults to `$HOME/eigen-3.3.9`; `CLI11_INCLUDE` defaults to
@@ -125,7 +136,6 @@ src/mc/cpp/sample_scalar_2d --nt 4 --nx 4 --mass-squared 0.01 --lambda 0.01 \
 Options can appear in any order; all model inputs and `--output` are required,
 while `--seed` defaults to `42` and `--thermalization-sweeps` defaults to
 `10000`. SU(2) samplers accept an optional `--decorrelation-sweeps` value,
-defaulting to `1`. Every executable supports `--help`. Other executables cover scalar fields in 3D/4D, open- and
 defaulting to `1`. Every executable supports `--help`. Other executables cover
 scalar fields in 3D/4D, open- and periodic-boundary U(1), open-boundary SU(2),
 and the transmon model; use their `--help` output for model-specific options.
