@@ -121,9 +121,9 @@ int main(int argc, char **argv)
     CLI::App app{"Generate periodic 2D scalar phi-four configurations"};
     app.add_option("--nt", p.nt, "Temporal lattice extent")->required();
     app.add_option("--nx", p.nx, "Spatial lattice extent")->required();
-    app.add_option("--mass-squared", p.m2, "Scalar mass squared")->required();
+    app.add_option("--m2", p.m2, "Scalar mass squared")->required();
     app.add_option("--lambda", p.lamda, "Quartic coupling")->required();
-    app.add_option("--decorrelation-sweeps", p.n_decor, "Sweeps between samples")->required();
+    app.add_option("--sweeps", p.n_decor, "Sweeps between samples")->required();
     app.add_option("--samples", p.n_conf, "Number of configurations to generate")->required();
     mc::add_output_options(app, output_path, seed);
     mc::add_thermalization_option(app, p.n_thermal);

@@ -114,7 +114,7 @@ int main(int argc, char **argv)
     CLI::App app{"Generate open-boundary SU(2) configurations in Euler coordinates"};
     app.add_option("--coupling", p.g, "SU(2) coupling")->required();
     app.add_option("--samples", p.n_conf, "Number of configurations to generate")->required();
-    app.add_option("--decorrelation-sweeps", p.n_decor, "Sweeps between samples")
+    app.add_option("--sweeps", p.n_decor, "Sweeps between samples")
         ->default_val(1);
     mc::add_output_options(app, output_path, seed);
     mc::add_thermalization_option(app, p.n_thermal);

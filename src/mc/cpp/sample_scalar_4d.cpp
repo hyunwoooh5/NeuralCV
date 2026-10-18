@@ -129,9 +129,9 @@ int main(int argc, char **argv)
     app.add_option("--nx", p.nx, "First spatial lattice extent")->required();
     app.add_option("--ny", p.ny, "Second spatial lattice extent")->required();
     app.add_option("--nz", p.nz, "Third spatial lattice extent")->required();
-    app.add_option("--mass-squared", p.m2, "Scalar mass squared")->required();
+    app.add_option("--m2", p.m2, "Scalar mass squared")->required();
     app.add_option("--lambda", p.lamda, "Quartic coupling")->required();
-    app.add_option("--decorrelation-sweeps", p.n_decor, "Sweeps between samples")->required();
+    app.add_option("--sweeps", p.n_decor, "Sweeps between samples")->required();
     app.add_option("--samples", p.n_conf, "Number of configurations to generate")->required();
     mc::add_output_options(app, output_path, seed);
     mc::add_thermalization_option(app, p.n_thermal);

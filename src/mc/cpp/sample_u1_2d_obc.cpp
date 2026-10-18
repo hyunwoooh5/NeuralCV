@@ -125,7 +125,7 @@ int main(int argc, char **argv)
     app.add_option("--nt", p.nt, "Temporal lattice extent")->required();
     app.add_option("--nx", p.nx, "Spatial lattice extent")->required();
     app.add_option("--beta", p.beta, "Gauge coupling")->required();
-    app.add_option("--decorrelation-sweeps", p.n_decor, "Sweeps between samples")->required();
+    app.add_option("--sweeps", p.n_decor, "Sweeps between samples")->required();
     app.add_option("--samples", p.n_conf, "Number of configurations to generate")->required();
     mc::add_output_options(app, output_path, seed);
     mc::add_thermalization_option(app, p.n_thermal);
