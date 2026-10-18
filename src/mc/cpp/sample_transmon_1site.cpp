@@ -163,23 +163,21 @@ int main(int argc, char **argv)
     p.delta = 1;
 
     unsigned int seed = 42;
-    double charging_energy_ghz;
-    double josephson_energy_ghz;
     std::string output_path;
     CLI::App app{"Generate periodic transmon phase configurations"};
-    app.add_option("--time-slices", p.nt, "Number of time slices")->required();
-    app.add_option("--total-time-ns", p.t, "Total simulation time in nanoseconds")->required();
-    app.add_option("--charging-energy-ghz", charging_energy_ghz, "Charging energy in GHz")->required();
-    app.add_option("--josephson-energy-ghz", josephson_energy_ghz, "Josephson energy in GHz")->required();
-    app.add_option("--decorrelation-sweeps", p.n_decor, "Sweeps between samples")->required();
+    app.add_option("--nt", p.nt, "Number of time slices")->required();
+    app.add_option("--t", p.t, "Total simulation time in nanoseconds")->required();
+    app.add_option("--E_C", p.E_C, "Charging energy in GHz")->required();
+    app.add_option("--E_J", p.E_J, "Josephson energy in GHz")->required();
+    app.add_option("--sweeps", p.n_decor, "Sweeps between samples")->required();
     app.add_option("--samples", p.n_conf, "Number of configurations to generate")->required();
     mc::add_output_options(app, output_path, seed);
     mc::add_thermalization_option(app, p.n_thermal);
     CLI11_PARSE(app, argc, argv);
 
     p.dof = p.nt;
-    p.E_C = 2 * PI * 1e9 * charging_energy_ghz;
-    p.E_J = 2 * PI * 1e9 * josephson_energy_ghz;
+    p.E_C *= 2 * PI * 1e9;
+    p.E_J *= 2 * PI * 1e9;
     p.dt = 1e-9 * p.t / p.nt;
     p.C = 1. / (2. * p.E_C);
     random.reseed(seed);
